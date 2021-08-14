@@ -1,0 +1,24 @@
+
+### triton
+-f https://download.pytorch.org/whl/torch_stable.html
+torch==1.9.0+cu111
+torchvision==0.10.0+cu111
+torchaudio==0.9.0
+triton
+numba
+### mpi
+mpi4py
+### WebRTC
+aiortc
+aiohttp
+av
+python-socketio[asyncio-client]
+asyncio
+crc32c
+### pyaudio
+pyaudio
+### numpy
+numpy
+
+opencv-python
+python-xlib
