@@ -4,6 +4,7 @@ import asyncio
 import socketio
 
 import cv2
+import base64
 
 import av
 from aiortc import RTCPeerConnection,\
@@ -298,17 +299,35 @@ async def on_ready():
 async def on_log(data):
     print("Received on_log", data)
 
+num = 0
+@sio.on("frame")
+async def on_frame(data):
+    global num
+    #data = base64.b64encode(data)
+    data = base64.b64decode(data)
+    data = np.frombuffer(data, dtype=np.uint8)
+    data = cv2.imdecode(data, flags=cv2.IMREAD_COLOR)
+    print("Got frame:", num)
+    num += 1
+    cv2.imshow("frame", data)
+    cv2.waitKey(5)
+
 
 async def main():
 
 
     await sio.connect("http://localhost:4000")
+    await sio.emit("startWebBrowser")
+    await asyncio.sleep(5)
+    await sio.emit("goto", "http://yelp.com")
+    await asyncio.sleep(5)
     print("My sid:", sio.sid)
     room = "foo"
     await createPeerConnection()
     await sio.emit("create or join", room)
     # await sendMessage("got user media")
     await sio.emit("ready")
+
     await sio.wait()
 
 async def close():
@@ -338,12 +357,15 @@ if __name__ == "__main__":
         rank0()
     elif rank == 1:
         didShow = False
+        # TODO pickle and unpickle neural net
+        # TODO form connections
         while True:
             t1 = time.time()
             handle = MPI.COMM_WORLD.recv(source=0)
             try:
                 t2 = time.time()
                 gpu_input = handle.open().copy_to_host()
+                # TODO Show dream instead of phone picture
                 cv2.imshow("test", gpu_input)
                 cv2.waitKey(5)
                 t3 = time.time()
@@ -354,4 +376,5 @@ if __name__ == "__main__":
         # voiceToText = VoiceToText()
         while True:
             audio_array = MPI.COMM_WORLD.recv(source=0)
+            # TODO send back audio output
             # voiceToText.receive_audio_array(audio_array)

@@ -44,7 +44,7 @@ class App extends React.Component<AppProps, AppState> {
       });
     }
     catch (error) {
-      console.error("Failed to get video stream:", error);
+      console.error("Failed to get video stream:" + error.message, error);
     }
   }
 }
