@@ -3,8 +3,8 @@ import cors from "cors";
 import routes from "./routes/index";
 import { Server as SocketIOServer } from "socket.io";
 import Puppeteer, { Browser, Page, CDPSession } from "puppeteer";
+import { installMouseHelper } from "./install-mouse-helper";
 import fs from "fs";
-import base64
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -31,10 +31,20 @@ class WebBrowserProxy {
             args: [
                 '--enable-usermedia-screen-capturing',
                 '--allow-http-screen-capture',
-                '--auto-select-desktop-capture-source=React App'
+                '--auto-select-desktop-capture-source=React App',
+
+                '--use-fake-ui-for-media-stream',
+                '--use-fake-device-for-media-stream',
+                '--use-file-for-fake-audio-capture=~/test.wav',
+                '--allow-file-access'
+            ],
+            ignoreDefaultArgs: [
+                '--mute-audio',
+                '--hide-scrollbars'
             ]
          });
         const page = await this.d_browser.newPage();
+        installMouseHelper(page);
         this.d_browserPage = page;
         page.on('console', message => console.log(message));
         const client = await page.target().createCDPSession();
@@ -43,7 +53,7 @@ class WebBrowserProxy {
         client.on('Page.screencastFrame', async (frame) => {
             console.log("Got frame:", cnt++);
             await client.send('Page.screencastFrameAck', { sessionId: frame.sessionId });
-            fs.writeFileSync('frame' + cnt + '.png', frame.data, 'base64');
+            //fs.writeFileSync('frame' + cnt + '.png', frame.data, 'base64');
             socket.emit('frame', frame.data)
         });
         await page.goto("http://google.com");
@@ -59,6 +69,22 @@ class WebBrowserProxy {
         console.log("Going to url:", url);
         await this.d_browserPage.goto(url);
         await this.d_browserPage.screenshot({ path: "test.png" });
+    }
+
+    public async mouseMove({ x, y } : { x:number, y:number }) {
+        if (!this.d_browserPage) {
+            throw new Error("No Browser Page");
+        }
+        console.log("Mouse move", { x, y});
+        await this.d_browserPage.mouse.move(x, y);
+    }
+
+    public async mouseClick({ x, y } : { x: number, y:number }) {
+        if (!this.d_browserPage) {
+            throw new Error("No Browser Page");
+        }
+        console.log("Mouse click", { x, y});
+        await this.d_browserPage.mouse.click(x, y);
     }
 
     public async stop() {
@@ -132,5 +158,11 @@ io.on("connection", (socket) => {
     });
     socket.on('goto', (url) => {
         webBrowserProxy.goto(url);
-    })
+    });
+    socket.on('mouseMove', ({ x, y }) => {
+        webBrowserProxy.mouseMove({x, y});
+    });
+    socket.on('mouseClick', ({ x, y }) => {
+        webBrowserProxy.mouseClick({ x, y});
+    });
 });

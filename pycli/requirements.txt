@@ -18,7 +18,7 @@ crc32c
 ### pyaudio
 pyaudio
 ### numpy
-numpy
+numpy==1.20
 
 opencv-python
 python-xlib

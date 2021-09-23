@@ -26,6 +26,7 @@ import time
 from mpi4py import MPI
 
 import pyaudio
+import wave
 
 from Xlib import display
 data = display.Display().screen().root.query_pointer()._data
@@ -307,7 +308,6 @@ async def on_frame(data):
     data = base64.b64decode(data)
     data = np.frombuffer(data, dtype=np.uint8)
     data = cv2.imdecode(data, flags=cv2.IMREAD_COLOR)
-    print("Got frame:", num)
     num += 1
     cv2.imshow("frame", data)
     cv2.waitKey(5)
@@ -318,9 +318,18 @@ async def main():
 
     await sio.connect("http://localhost:4000")
     await sio.emit("startWebBrowser")
-    await asyncio.sleep(5)
-    await sio.emit("goto", "http://yelp.com")
-    await asyncio.sleep(5)
+    await asyncio.sleep(2)
+    await sio.emit("goto", "https://www.youtube.com/watch?v=n068fel-W9I")
+    await asyncio.sleep(2)
+    await sio.emit("mouseMove", {
+        "x": 280,
+        "y": 290
+    })
+    await sio.emit("mouseClick", {
+        "x": 380,
+        "y": 290
+    })
+    
     print("My sid:", sio.sid)
     room = "foo"
     await createPeerConnection()
@@ -378,3 +387,31 @@ if __name__ == "__main__":
             audio_array = MPI.COMM_WORLD.recv(source=0)
             # TODO send back audio output
             # voiceToText.receive_audio_array(audio_array)
+    elif rank == 3:
+        p = pyaudio.PyAudio()
+        CHUNK = 1024
+        RATE = 44100
+        RECORD_SECONDS = 20
+        CHANNELS = 2
+        FORMAT=pyaudio.paInt16
+
+        print("Recording")
+        stream = p.open(format=FORMAT,
+            channels=CHANNELS,
+            rate=RATE,
+            input=True,
+            frames_per_buffer=CHUNK)
+        recording = []
+        for i in range(int(RATE/CHUNK * RECORD_SECONDS)):
+            data = stream.read(CHUNK)
+            recording.append(data)
+        stream.stop_stream()
+        stream.close()
+        p.terminate()
+        print("Done recording")
+        wf = wave.open("./test.wav", "wb")
+        wf.setnchannels(CHANNELS)
+        wf.setsampwidth(p.get_sample_size(FORMAT))
+        wf.setframerate(RATE)
+        wf.writeframes(b''.join(recording))
+        wf.close()
