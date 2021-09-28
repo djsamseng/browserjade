@@ -1,4 +1,5 @@
 import express, { Express } from "express";
+import bodyParser from "body-parser";
 import cors from "cors";
 import routes from "./routes/index";
 import { Server as SocketIOServer } from "socket.io";
@@ -8,6 +9,7 @@ import fs from "fs";
 
 const app = express();
 const PORT = process.env.PORT || 4000;
+const jsonParser = bodyParser.json();
 
 app.use(cors());
 app.use(routes);
@@ -26,6 +28,12 @@ class WebBrowserProxy {
 
     }
     public async start(socket: any) {
+        if (this.d_browser) {
+            await this.stop();
+            await this.d_browserPage?.close();
+            await this.d_browser.close();
+            this.d_browser = undefined;
+        }
         this.d_browser = await Puppeteer.launch({
             headless: true,
             args: [
@@ -35,7 +43,7 @@ class WebBrowserProxy {
 
                 '--use-fake-ui-for-media-stream',
                 '--use-fake-device-for-media-stream',
-                '--use-file-for-fake-audio-capture=~/test.wav',
+                '--use-file-for-fake-audio-capture=/home/test.wav',
                 '--allow-file-access'
             ],
             ignoreDefaultArgs: [
@@ -87,6 +95,12 @@ class WebBrowserProxy {
         await this.d_browserPage.mouse.click(x, y);
     }
 
+    public async scroll({ x=0, y=0 }) {
+        await this.d_browserPage?.evaluate(({x,y}) => {
+            window.scrollBy(x, y);
+        }, {x,y});
+    }
+
     public async stop() {
         if (!this.d_cdpSession) {
             throw new Error("No CDP Session");
@@ -95,9 +109,16 @@ class WebBrowserProxy {
     }
 };
 
+const webBrowserProxy = new WebBrowserProxy();
+
+// routes.post("/goto", jsonParser, async (req, resp) => {
+//    console.log("REQ:", req.body.url);
+//    await webBrowserProxy.goto(req.body.url);
+//    resp.send();
+// });
+
 io.on("connection", (socket) => {
     console.log("Got socket.io connection");
-    const webBrowserProxy = new WebBrowserProxy();
     socket.on("offer", (offer) => {
         socket.broadcast.emit("offer", offer);
     });
@@ -156,8 +177,9 @@ io.on("connection", (socket) => {
     socket.on('startWebBrowser', () => {
         webBrowserProxy.start(socket);
     });
-    socket.on('goto', (url) => {
-        webBrowserProxy.goto(url);
+    socket.on('goto', async (url, cb) => {
+        await webBrowserProxy.goto(url);
+        cb();
     });
     socket.on('mouseMove', ({ x, y }) => {
         webBrowserProxy.mouseMove({x, y});
@@ -165,4 +187,7 @@ io.on("connection", (socket) => {
     socket.on('mouseClick', ({ x, y }) => {
         webBrowserProxy.mouseClick({ x, y});
     });
+    socket.on('scroll', ({ x, y }) => {
+        webBrowserProxy.scroll({ x, y });
+    })
 });
