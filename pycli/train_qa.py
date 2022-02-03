@@ -10,7 +10,8 @@ import socketio
 import cv2
 import base64
 import json
-import requests
+
+from PIL import Image
 
 from numba import cuda
 import numpy as np
@@ -19,10 +20,12 @@ from mpi4py import MPI
 
 sio = socketio.AsyncClient()
 
+BROWSER_WIDTH = 600
+BROWSER_HEIGHT = 800
 
 class AnsweringAI:
     def __init__(self) -> None:
-        self.frame = np.zeros((600, 800, 3), dtype=np.uint8)
+        self.frame = np.zeros((BROWSER_WIDTH, BROWSER_HEIGHT, 3), dtype=np.uint8)
         self.question = None
         self.answers = None
 
@@ -45,6 +48,8 @@ class AnsweringAI:
         # First show it letters S = S etc. (can do this on our own webpage)
         scroll_x = 0
         scroll_y = 0
+        look_x = 0
+        look_y = 0
         answer = ""
         return (
             scroll_x,
@@ -54,6 +59,9 @@ class AnsweringAI:
 
     def set_frame(self, frame):
         self.frame = frame
+        im = Image.fromarray(frame)
+        resize_shape = (int(BROWSER_WIDTH/10), int(BROWSER_HEIGHT/10))
+        self.thumbnail = np.array(im.resize(resize_shape))
 
     def set_qa(self, question, answers):
         self.question = question
@@ -100,6 +108,12 @@ async def watch_youtube():
         "y": 290
     })
 
+def get_line_len(line, size):
+    # 5 = 80a + b
+    # 1 = 6a + b 
+    size_mult = 6 * size / 74 + 38 / 74
+    return len(line) * size_mult
+
 async def train_letters():
     letters = []
     # ! # etc.
@@ -125,8 +139,19 @@ async def train_letters():
         letters.append(chr(i))
     
     for letter in letters:
+        size = np.random.randint(6, 80)
+        line_len = get_line_len(letter, size)
+        x = np.random.randint(BROWSER_WIDTH - line_len)
+        y = np.random.randint(BROWSER_HEIGHT - line_len)
+        
+        rotate = np.random.randint(-40, 40)
         await goto(
-            SERVER_URL + "/letters?letter=" + letter)
+            SERVER_URL + \
+            "/letters?letter=" + \
+            letter + \
+            "&x=" + str(x) + "&y=" + str(y) + \
+            "&size=" + str(size) + \
+            "&rotate=" + str(rotate))
         answers = [letter]
         answeringAI.set_qa("What letter is this?", answers)
         answer = "!"
@@ -147,9 +172,16 @@ async def train_words():
     f = open("/usr/share/dict/american-english")
     lines = f.readlines()
     for line in lines:
+        size = np.random.randint(6, 60)
         line = line.strip("\n")
+        line_len = get_line_len(line, size)
+        x = np.random.randint(BROWSER_WIDTH - line_len)
+        y = np.random.randint(BROWSER_HEIGHT - line_len)
         await goto(
-            SERVER_URL + "/letters?letter=" + line)
+            SERVER_URL + \
+            "/letters?letter=" + \
+            line + \
+            "&x=" + str(x) + "&y=" + str(y))
         answers = [line]
         answeringAI.set_qa("What word is this?", answers)
         answer = "A"

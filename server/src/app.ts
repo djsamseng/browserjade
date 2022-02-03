@@ -68,6 +68,7 @@ class WebBrowserProxy {
         await client.send('Page.startScreencast', {
             format: 'png', everyNthFrame: 1
         });
+        console.log("Viewport:", page.viewport())
     }
 
     public async goto(url: string) {
